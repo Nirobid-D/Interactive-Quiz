@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz with Embedded Questions</title>
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 10px;
+            transition: background-color 0.5s ease;
+        }
+        body.normal-mode {
+            background-color: #f0f8ff;
+        }
+        body.timed-mode {
+            background-color: #ffebee;
+        }
+        @keyframes blink {
+            0% { background-color: #ffebee; }
+            50% { background-color: #ffcccc; }
+            100% { background-color: #ffebee; }
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.5em;
+        }
+        #countdown-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        #countdown-number {
+            font-size: 100px;
+            color: white;
+            font-weight: bold;
+        }
+        #timed-mode-controls {
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        #timed-mode-controls label {
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        #timed-mode-controls input {
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 50px;
+        }
+        #timed-mode-controls button {
+            padding: 8px 15px;
+            margin: 3px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #timed-mode-controls button:hover {
+            background-color: #0056b3;
+        }
+        #timer {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            font-size: 0.8em;
+            font-weight: bold;
+            color: #d32f2f;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 5px 10px;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+        #quiz {
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .question {
+            margin-bottom: 10px;
+        }
+        .question-text {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+        .options label {
+            display: block;
+            margin-bottom: 5px;
+            cursor: pointer;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+        .options label:hover {
+            background-color: #f9f9f9;
+        }
+        .correct {
+            background-color: #d4edda !important;
+            border-color: #c3e6cb !important;
+        }
+        .incorrect {
+            background-color: #f8d7da !important;
+            border-color: #f5c6cb !important;
+        }
+        .highlight-correct {
+            background-color: #fff9c4 !important;
+        }
+        #score {
+            font-weight: bold;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 1.1em;
+        }
+        #answer-keys {
+            display: none;
+            margin-top: 10px;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #answer-keys h3 {
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+        #keys {
+            font-size: 1em;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="normal-mode">
+    <div id="countdown-overlay">
+        <div id="countdown-number">3</div>
+    </div>
+    <h1 id="quiz-title">Interactive Quiz Sample</h1>
+    <div id="timed-mode-controls">
+        <label for="time-limit" id="time-limit-label">Time limit per question (seconds):</label>
+        <input type="number" id="time-limit" min="1" value="10">
+        <button id="start-timed-mode-button" onclick="startTimedMode()">Start Timed Mode</button>
+        <button id="normal-mode-button" class="hidden" onclick="switchToNormalMode()">Normal Mode</button>
+    </div>
+    <p id="timer"></p>
+    <div style="text-align: center; margin-bottom: 10px;">
+        <label for="instant-feedback-switch">
+            <input type="checkbox" id="instant-feedback-switch" onclick="toggleInstantFeedback()"> Enable Instant Feedback
+        </label>
+        <label for="reading-question-switch">
+            <input type="checkbox" id="reading-question-switch" onclick="toggleReadingQuestion()"> Enable Reading Question
+        </label>
+        <button id="toggle-timer-button" class="hidden" onclick="toggleTimerVisibility()">Hide Remaining Time</button>
+    </div>
+    <div id="quiz"></div>
+    <div id="action-buttons" style="text-align: center; margin-top: 10px;">
+        <button onclick="checkAnswers()">Check Answers</button>
+        <button onclick="showAnswerKeys()">Show Answer Keys</button>
+        <button onclick="resetQuiz()">Reset</button>
+        <button onclick="shuffleQuestions()" id="shuffle-button">Shuffle Questions</button>
+    </div>
+    <div id="next-question-button-container" class="hidden" style="text-align: center; margin-top: 10px;">
+        <button id="next-question-button" onclick="handleNextQuestion()">Next Question</button>
+    </div>
+    <p id="score"></p>
+    <div id="answer-keys">
+        <h3>Answer Keys</h3>
+        <p id="keys"></p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        // Embedded encrypted questions
+        const encryptedCSV = `Xblzapvu,Vwapvu H,Vwapvu I,Vwapvu J,Vwapvu K,Jvyylja Huzdly
+"Pu aol nhyklu, aolyl hyl yvzlz, zbumsvdlyz, abspwz, huk zhtwhnbpah. Doha alea afwl pz aopz.",Jshzzpmpjhapvu,Lewshuhapvu,Lubtlyhapvu,Aptl Vykly,2
+"Hmaly zjovvs, P wshflk ihzrlaihss, kpk tf ovtldvyr, huk ohk kpuuly. Doha alea afwl pz aopz.",Jshzzpmpjhapvu,Lewshuhapvu,Lubtlyhapvu,Aptl Vykly,3
+"Aolyl hyl zlclyhs afwlz vm ayhuzwvyahapvu: shuk ayhuzwvyahapvu, hpy ayhuzwvyahapvu, huk dhaly ayhuzwvyahapvu. Doha alea afwl pz aopz.",Jshzzpmpjhapvu,Lewshuhapvu,Lubtlyhapvu,Aptl Vykly,0
+Hu lslwohua pz h shynl thtths ruvdu mvy paz svun aybur huk ipn lhyz. Pa spclz pu aol mvylzaz huk zhchuuhz vm Hzph huk Hmypjh. Doha alea afwl pz aopz.,Jshzzpmpjhapvu,Lewshuhapvu,Lubtlyhapvu,Aptl Vykly,1
+"Kbypun aol zbttly, P nv zdpttpun, wshf zvjjly, huk ohcl h wpjupj. Doha alea afwl pz aopz.",Jshzzpmpjhapvu,Lewshuhapvu,Lubtlyhapvu,Aptl Vykly,3
+"Tf mhcvypal hupthsz hyl jhaz, kvnz, huk yhiipaz. Doha alea afwl pz aopz.",Jshzzpmpjhapvu,Lewshuhapvu,Lubtlyhapvu,Aptl Vykly,2
+Vypnpuhs: Aol zrf pz isbl. Ylzahalk: Aol zrf pz hgbyl.,Bzl Zfuvuftz,Tvkpmf Zlualujl Zaybjabyl,Jshzzpmf Pumvythapvu huk Zlwhyhal Zlualujlz,,0
+Vypnpuhs: Aol kvn ihyrlk svbksf huk zjhylk aol puaybkly. Ylzahalk: Aol kvn ihyrlk svbksf. Pa zjhylk aol puaybkly.,Bzl Zfuvuftz,Tvkpmf Zlualujl Zaybjabyl,Jshzzpmf Pumvythapvu huk Zlwhyhal Zlualujlz,,2
+Vypnpuhs: Aol mpzolythu jhbnoa h ipn mpzo. Ylzahalk: H ipn mpzo dhz jhbnoa if aol mpzolythu.,Bzl Zfuvuftz,Tvkpmf Zlualujl Zaybjabyl,Jshzzpmf Pumvythapvu huk Zlwhyhal Zlualujlz,,1
+"Whzzhnl: Kvnz hyl svfhs hupthsz aoha hyl vmalu jhsslk 'thu'z ilza mypluk.' Aolf jhu il ayhpulk av kv thuf ahzrz, sprl nbpkpun aol ispuk, klaljapun khunly, vy wyvcpkpun jvtmvya. Kvnz hszv svcl av wshf huk hyl nylha jvtwhupvuz mvy wlvwsl vm hss hnlz. Doha pz aol thpu pklh?",Kvnz hyl nylha jvtwhupvuz mvy wlvwsl vm hss hnlz iljhbzl vm aolpy mypluksf huk wshfmbs uhabyl.,"Kvnz jhu nbpkl aol ispuk, klalja khunly, huk wlymvyt chypvbz ahzrz av olsw obthuz.",Kvnz jhu olsw huk jvtmvya wlvwsl if ilpun ivao bzlmbs huk mypluksf.,Kvnz hyl jhsslk 'thu'z ilza mypluk' iljhbzl vm aolpy svfhsaf huk hipspaf av mvyt zayvun ivukz.,3
+"Whzzhnl: Aol tvvu pz Lhyao’z vusf uhabyhs zhalsspal. Pa ylmsljaz zbuspnoa, dopjo pz dof pa svvrz iypnoa ha upnoa. Aol tvvu hmmljaz aol apklz pu Lhyao’z vjlhuz iljhbzl vm paz nyhcpaf. Wlvwsl ohcl zabkplk aol tvvu mvy jluabyplz, huk hzayvuhbaz lclu shuklk vu pa pu 1969. Doha pz aol thpu pklh?",Aol tvvu pz iypnoa iljhbzl pa ylmsljaz zbuspnoa huk pz cpzpisl ha upnoa pu aol zrf.,"Aol tvvu pz Lhyao’z zhalsspal huk ohz ptwvyahua lmmljaz vu vby wshula, pujsbkpun apklz huk spnoa.",Aol tvvu hmmljaz aol apklz dpao paz nyhcpaf huk ohz illu zabkplk mvy jluabyplz if zjpluapzaz.,"Hzayvuhbaz shuklk vu aol tvvu pu 1969, thyrpun hu ptwvyahua tpslzavul pu obthu opzavyf.",1
+Whzzhnl: Qllwulfz hyl vul vm aol tvza pjvupj tvklz vm ayhuzwvyahapvu pu aol Wopspwwpulz. Aolf hyl vmalu iypnoasf jvsvylk huk zlycl hz hu hmmvykhisl huk lmmpjplua dhf av ayhcls zovya kpzahujlz. Qllwulfz hyl bzlk pu ivao byihu huk ybyhs hylhz. Doha pz UVA h zbwwvyapun klahps?,Qllwulfz hyl iypnoasf jvsvylk huk hmmvykhisl.,Qllwulfz hyl bzlk mvy zovya-kpzahujl ayhcls pu ivao byihu huk ybyhs hylhz.,Qllwulfz jhu ayhcls svun kpzahujlz hjyvzz aol Wopspwwpulz.,Qllwulfz hyl vmalu bzlk mvy wbispj ayhuzwvyahapvu pu aol Wopspwwpulz.,2
+Whzzhnl: Thuf jopskylu sprl av wshf cpklv nhtlz. Zvtl zwluk ovbyz wshfpun aolpy mhcvypal nhtlz. Vaolyz luqvf nhtlz vu aolpy wovulz vy ahislaz. Dopjo pz aol nlulyhspghapvu fvb jhu thrl myvt aol whzzhnl?,Lclyf jopsk pu aol dvysk wshfz cpklv nhtlz.,Thuf jopskylu luqvf cpklv nhtlz.,Vusf nyhuktvaolyz wshf cpklv nhtlz.,Cpklv nhtlz kvu’a lepza.,1
+Whzzhnl: Kvnz hyl mypluksf hupthsz. Aolf sprl av il hyvbuk wlvwsl huk vmalu dhn aolpy ahpsz dolu aolf hyl ohwwf. Thuf kvnz luqvf wshfpun dpao jopskylu huk ybuupun vbazpkl. Dopjo pz aol nlulyhspghapvu fvb jhu thrl myvt aol whzzhnl?,Kvnz hyl hjabhssf yvivaz.,Thuf kvnz hyl mypluksf huk luqvf wshfpun.,Kvnz jhu msf pu aol zrf sprl ipykz.,Hss kvnz kpzsprl wlvwsl.,1
+"Whzzhnl: Tvza mybpaz hyl zdlla huk qbpjf. Hwwslz, vyhunlz, huk nyhwlz hyl wvwbshy iljhbzl aolf ahzal klspjpvbz. Thuf wlvwsl luqvf lhapun mybpa hz h zuhjr. Dopjo pz aol nlulyhspghapvu fvb jhu thrl myvt aol whzzhnl?",Lclyf mybpa ahzalz lehjasf aol zhtl.,Thuf wlvwsl sprl av lha mybpa.,Mybpa pz thkl vm tlahs.,Uvivkf ohz lcly lhalu mybpa.,1
+Doha kv fvb jhss aol wlyzvu vy hupths aoha aol zavyf pz hivba?,Johyhjaly,Zlaapun,Wsva,Jvumspja,0
+"Pu h zavyf hivba h wpyhal hkcluabyl, doha pz aol pzshuk dolyl aol aylhzbyl pz opkklu?",Johyhjaly,Zlaapun,Wsva,Jvumspja,1
+Doha pz aol whya vm aol zavyf dolyl aol olyv mhjlz aolpy nylhalza johsslunl?,Johyhjaly,Zlaapun,Wsva,Jvumspja,3
+Doha kv fvb jhss aol lcluaz aoha ohwwlu pu h zavyf myvt ilnpuupun av luk?,Johyhjaly,Zlaapun,Wsva,Jvumspja,2
+"Pm h zavyf pz hivba h mhtpsf spcpun pu h zthss cpsshnl, doha pz aol cpsshnl?",Johyhjaly,Zlaapun,Wsva,Jvumspja,1
+Doha lsltlua pz aol hynbtlua iladllu adv myplukz aoha jylhalz aluzpvu pu aol zavyf?,Johyhjaly,Zlaapun,Wsva,Jvumspja,3
+Dolu zvtlvul alssz fvb 'P kvu’a buklyzahuk aopz thao wyvislt. Jhu fvb lewshpu pa av tl?' Dopjo pz aol tvza ahjambs ylzwvuzl?,Mpnbyl pa vba fvbyzlsm.,P kvu’a ohcl aptl av olsw fvb.,Zbyl! Sla’z nv aoyvbno pa zalw if zalw.,"Dvd, fvb kvu’a ruvd aopz? Aoha’z zv lhzf!",2
+"Dolu zvtlvul thkl h ylthyr 'P ayplk av jvvr hkviv, iba pa kpku’a ahzal sprl tf tvt’z.' Dopjo pz aol tvza hwwyvwyphal jvttlua?",Jvvrpun ahrlz aptl; ayf hnhpu huk hkqbza aol zlhzvupun.,Thfil fvb hyl uva nvvk ha jvvrpun,Fvb’ss ulcly il hisl av jvvr pa sprl fvby tvt.,"Hkviv pz hsdhfz aol zhtl, zv pa zovbsk ahzal aol zhtl.",0
+"Kbypun h nyvbw kpzjbzzpvu hivba Mpspwpuv mlzapchsz, vul wlyzvu pz alsspun h zavyf, iba aol nyvbw zlltz kpzayhjalk. Fvb dhua av iypun aol nyvbw ihjr huk rllw aol kpzjbzzpvu nvpun. Dopjo pz aol ilza ylzwvuzl?",P kvu’a aopur hufvul pz pualylzalk pu fvby zavyf.,Sla’z qbza ahsr hivba zvtlaopun lszl.,Fvb’cl ahsrlk luvbno; P dhua av ahsr uvd.,Aoha’z h nylha zavyf! Jhu hufvul lszl zohyl aolpy lewlyplujl dpao h mlzapchs?,3
+Doha kvlz pa tlhu av 'thrl h zahuk' dolu fvb zayvunsf ilsplcl pu zvtlaopun?,Zahf xbpla huk kvu'a lewylzz fvby vwpupvu.,Zwlhr bw huk zohyl fvby aovbnoaz vy ilsplmz.,Pnuvyl doha vaolyz hyl zhfpun.,Hnyll dpao lclyfvul lszl'z vwpupvuz.,1
+Dolu zovbsk fvb thrl h zahuk?,Dolu fvb kvu'a jhyl hivba aol pzzbl.,Dolu fvb'yl uva zbyl hivba fvby ilsplmz.,Dolu fvb zayvunsf ilsplcl pu zvtlaopun huk dhua av thrl h kpmmlylujl.,Dolu lclyfvul lszl pz zpslua,2
+Dof pz pa ptwvyahua av thrl h zahuk mvy doha fvb ilsplcl pu?,Iljhbzl pa'z mbu.,Iljhbzl pa olswz fvb mpa pu dpao vaolyz.,Iljhbzl pa zovdz vaolyz doha fvb jhyl hivba huk jhu slhk av wvzpapcl johunl.,Iljhbzl pa'z doha lclyfvul lszl pz kvpun.,2
+Doha jhu ohwwlu pm fvb kvu'a thrl h zahuk mvy doha fvb ilsplcl pu?,Vaolyz tpnoa pnuvyl fvb.,Fvb tpnoa svzl myplukz.,Uvaopun.,"Fvby cvpjl thf uva il olhyk, huk aol zpabhapvu thf uva ptwyvcl.",3
+Doha pz vul dhf fvb jhu thrl h zahuk mvy zvtlaopun fvb ilsplcl pu?,If zahfpun zpslua huk uva lewylzzpun fvby vwpupvu.,If ahsrpun hivba pa dpao vaolyz huk zohypun fvby aovbnoaz ylzwljambssf.,"If wylalukpun av hnyll dpao lclyfvul lszl, lclu pm fvb kvu'a.",If hcvpkpun aol avwpj hsavnlaoly.,1
+"Dopjo vm aol mvssvdpun klzjypilz aol hja vm lewylzzpun fvby ilsplmz vy vwpupvuz jslhysf, lzwljphssf dolu aolf kpmmly myvt vaolyz?",Hnyllpun dpao lclyfvul lszl av hcvpk jvumspja.,Johunpun fvby vwpupvu av thajo aol nyvbw’z vwpupvu.,Thrpun h Zahuk,Uvu vm aol hivcl,2
+Mpspwpuv mvvk sprl hkviv pz aol ilza pu aol dvysk.,Mhja,Vwpupvu,,,1
+Zabkluaz pu aol Wopspwwpulz bzbhssf dlhy bupmvytz av zjovvs.,Mhja,Vwpupvu,,,0
+P aopur qllwulfz hyl aol ilza dhf av ayhcls hyvbuk aol jpaf.,Mhja,Vwpupvu,,,1
+Ypjl pz aol zahwsl mvvk vm tvza Mpspwpuvz.,Mhja,Vwpupvu,,,0
+Doha kvlz pa tlhu av wyvcpkl lcpklujl av zbwwvya h mhja?,"Wylzluapun mhjaz, lehtwslz, vy klahpsz aoha ihjr bw fvby zahaltlua.",Thrpun bw mhjaz dpaovba huf wyvvm.,Bzpun vwpupvuz av wyvcl fvby wvpua.,Rllwpun fvby aovbnoaz av fvbyzlsm.,0
+Dof pz pa ptwvyahua av wyvcpkl lcpklujl dolu zahapun h mhja?,Iljhbzl pa'z uva uljlzzhyf.,Iljhbzl pa olswz vaolyz ilsplcl doha fvb'yl zhfpun.,Iljhbzl pa'z mbu.,Iljhbzl pa thrlz aol kpzjbzzpvu svunly.,1
+Doha jhu fvb bzl hz lcpklujl av zbwwvya h mhja?,Thkl-bw zavyplz.,Wlyzvuhs vwpupvuz.,"Mhjaz, lehtwslz, vy klahpsz.",Yhukvt nblzzlz.,2
+Doha zovbsk fvb kv pm fvb dhua av zbwwvya h mhja dpao lcpklujl?,Thrl bw hkkpapvuhs mhjaz.,Bzl chnbl zahaltluaz.,Pnuvyl aol ullk mvy lcpklujl.,"Wyvcpkl zwljpmpj klahpsz, lehtwslz, vy mhjaz aoha zbwwvya fvby zahaltlua.",3
+"Dopjo vm aol mvssvdpun pz h chspk wpljl vm lcpklujl av zbwwvya aol zahaltlua, 'Mpspwpuv mvvk pz aol ilza pu aol dvysk'?",Mpspwpuv mvvk pz zlyclk ha mhtpsf nhaolypunz huk whyaplz.,Mpspwpuv mvvk pz aol zhtl hz mvvk myvt vaoly jvbuayplz.,Mpspwpuv mvvk pz luqvflk if wlvwsl myvt hss vcly aol dvysk.,Hkviv huk sljovu hyl aol vusf mvvkz zlyclk pu aol Wopspwwpulz.,2
+Dopjo lcpklujl ilza zbwwvyaz aol jshpt aoha 'Lkbjhapvu pu aol Wopspwwpulz pz ptwvyahua'?,Mpspwpuv jopskylu ohal zjovvs.,Vusf ypjo mhtpsplz zluk aolpy jopskylu av zjovvs.,Lkbjhapvu pz myll myvt lsltluahyf av opno zjovvs.,Mpspwpuvz kv uva chsbl lkbjhapvu.,2
+Dopjo lcpklujl zbwwvyaz aol mhja aoha 'Thupsh pz aol jhwpahs vm aol Wopspwwpulz'?,Aol nvclyutlua vmmpjlz huk uhapvuhs tvubtluaz hyl svjhalk pu Thupsh.,Thupsh pz aol zthsslza jpaf pu aol Wopspwwpulz.,Thupsh pz uva pu aol Wopspwwpulz.,Thupsh pz h ilhjo ylzvya pu aol Wopspwwpulz.,0
+Dopjo lcpklujl ilza zbwwvyaz aol vwpupvu 'Mpspwpuv jbpzpul pz bupxbl'?,"Mpspwpuv kpzolz hyl ruvdu mvy aolpy bupxbl jvtipuhapvu vm zdlla, zvby, huk zhsaf mshcvyz.",Mpspwpuv mvvk pz aol zhtl hz Jopulzl mvvk.,Sljovu huk hkviv hyl aol vusf Mpspwpuv kpzolz.,Hss Mpspwpuv mvvk ahzalz aol zhtl.,0
+Dopjo zahaltlua ilza zbwwvyaz aol mhja aoha 'Aol Wopspwwpulz ohz h ypjo opzavyf'?,Aol Wopspwwpulz dhz uva pumsblujlk if thuf kpmmlylua jvbuayplz aoyvbnovba opzavyf.,Mpspwpuvz kvu’a jhyl hivba aolpy jvbuayf’z opzavyf.,Aol Wopspwwpulz ohz thuf ptwvyahua opzavypjhs zpalz sprl Puayhtbyvz huk Ypghs Whyr.,Aol Wopspwwpulz dhz ulcly jvsvupglk if vaoly jvbuayplz.,2
+Dopjo wpljl vm lcpklujl zbwwvyaz aol vwpupvu 'Mpspwpuv wlvwsl hyl ohykdvyrpun'?,Thuf Mpspwpuvz svcl av il vu aolpy wovul hss khf.,Mpspwpuvz ylshe huk kv uvaopun hss khf.,Mpspwpuvz ulcly dvyr; aolf qbza zwluk aptl ha aol thss.,Mpspwpuvz dvyr svun ovbyz av lhyu h spcpun.,3
+"Dopjo lcpklujl ilza zbwwvyaz aol jshpt 'Aol Mpspwpuv shunbhnl, Ahnhsvn, pz dpklsf zwvrlu'?",Ahnhsvn pz zwvrlu if tpsspvuz vm wlvwsl pu aol Wopspwwpulz.,Vusf h mld wlvwsl pu aol Wopspwwpulz zwlhr Ahnhsvn.,Ahnhsvn pz aol thpu shunbhnl pu Jhuklshyph vusf.,Mpspwpuvz kvu’a buklyzahuk Ahnhsvn.,0
+`;
+
+        let questions = [];
+        let instantFeedback = false;
+        let enableReadingQuestion = false;
+        let currentQuestionIndex = 0;
+        let timerInterval;
+        let timeLeft;
+        let isTimedMode = false;
+        let selectedAnswers = [];
+        let isTimerVisible = true;
+        let isShuffleDisabled = false;
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowUp') {
+                window.scrollBy(0, -50);
+                event.preventDefault();
+            } else if (event.key === 'ArrowDown') {
+                window.scrollBy(0, 50);
+                event.preventDefault();
+            } else if (event.key === 'ArrowRight' && isTimedMode) {
+                playSound('final-beep'); // Play final beep on right arrow key press
+                handleNextQuestion();
+                event.preventDefault();
+            }
+        });
+
+        // Decode Caesar cipher
+        function decodeCaesarCipher(text, shift = 7) {
+            return text.split('').map(char => {
+                if (char.match(/[A-Za-z]/)) {
+                    const code = char.charCodeAt(0);
+                    const base = char === char.toUpperCase() ? 65 : 97;
+                    return String.fromCharCode((code - base - shift + 26) % 26 + base);
+                }
+                return char;
+            }).join('');
+        }
+
+        // Parse embedded encrypted CSV
+        function parseEmbeddedCSV() {
+            const decodedCSV = decodeCaesarCipher(encryptedCSV);
+            const results = Papa.parse(decodedCSV, {
+                header: true,
+                skipEmptyLines: true
+            });
+            return results.data.map(row => ({
+                question: row.Question.trim(),
+                options: [
+                    `A) ${row['Option A'].trim()}`,
+                    `B) ${row['Option B'].trim()}`,
+                    `C) ${row['Option C'].trim()}`,
+                    `D) ${row['Option D'].trim()}`
+                ],
+                correct: parseInt(row['Correct Answer'].trim(), 10)
+            }));
+        }
+
+        // Initialize quiz with embedded questions
+        questions = parseEmbeddedCSV();
+        selectedAnswers = new Array(questions.length).fill(null);
+        loadQuiz();
+
+        function startTimedMode() {
+            const overlay = document.getElementById('countdown-overlay');
+            const countdownNumber = document.getElementById('countdown-number');
+            let count = 3;
+            
+            overlay.style.display = 'flex';
+            countdownNumber.textContent = count; // Initialize countdown number
+            
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count === 0) {
+                    countdownNumber.textContent = "START!";
+                    playSound('beep');
+                    clearInterval(countdownInterval);
+                    setTimeout(() => {
+                        overlay.style.display = 'none';
+                        playSound('final-beep');
+                        initializeTimedMode();
+                    }, 1000);
+                } else {
+                    countdownNumber.textContent = count;
+                    playSound('beep');
+                }
+            }, 1000);
+        }
+
+        function initializeTimedMode() {
+            isTimedMode = true;
+            currentQuestionIndex = 0;
+            timeLeft = parseInt(document.getElementById('time-limit').value, 10);
+            document.body.classList.remove('normal-mode');
+            document.body.classList.add('timed-mode');
+            document.getElementById('action-buttons').classList.add('hidden');
+            document.getElementById('next-question-button-container').classList.remove('hidden');
+            document.getElementById('toggle-timer-button').classList.remove('hidden');
+            document.getElementById('time-limit-label').classList.add('hidden');
+            document.getElementById('time-limit').classList.add('hidden');
+            document.getElementById('start-timed-mode-button').classList.add('hidden');
+            document.getElementById('normal-mode-button').classList.remove('hidden');
+            document.getElementById('answer-keys').style.display = 'none';
+            document.getElementById('score').innerText = '';
+            loadQuiz();
+        }
+
+        function loadQuiz() {
+            const quizDiv = document.getElementById('quiz');
+            quizDiv.innerHTML = '';
+            questions.forEach((q, i) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.classList.add('question');
+                questionDiv.id = `question-${i}`;
+                if (isTimedMode && i !== currentQuestionIndex) {
+                    questionDiv.classList.add('hidden');
+                }
+                const questionText = document.createElement('p');
+                questionText.classList.add('question-text');
+                questionText.innerText = `${i + 1}. ${q.question}`;
+                questionText.addEventListener('click', () => speakQuestionAndOptions(q));
+                questionDiv.appendChild(questionText);
+                const optionsDiv = document.createElement('div');
+                optionsDiv.classList.add('options');
+                q.options.forEach((option, j) => {
+                    const optionLabel = document.createElement('label');
+                    optionLabel.innerHTML = `<input type="radio" name="question${i}" value="${j}" onchange="handleAnswer(${i}, ${j})" ${selectedAnswers[i] === j ? 'checked' : ''}> ${option}`;
+                    optionsDiv.appendChild(optionLabel);
+                });
+                questionDiv.appendChild(optionsDiv);
+                quizDiv.appendChild(questionDiv);
+            });
+            if (isTimedMode) {
+                startQuestionTimer();
+                if (enableReadingQuestion) {
+                    const currentQuestion = questions[currentQuestionIndex];
+                    speakQuestionAndOptions(currentQuestion);
+                }
+            }
+            const nextQuestionButton = document.getElementById('next-question-button');
+            if (currentQuestionIndex === questions.length - 1) {
+                nextQuestionButton.innerText = 'Done';
+            } else {
+                nextQuestionButton.innerText = 'Next Question';
+            }
+            // Disable shuffle button if returning from timed mode
+            if (isShuffleDisabled) {
+                document.getElementById('shuffle-button').disabled = true;
+            }
+        }
+
+        function switchToNormalMode() {
+            isTimedMode = false;
+            clearInterval(timerInterval);
+            document.getElementById('timer').innerText = '';
+            document.body.classList.remove('timed-mode');
+            document.body.classList.add('normal-mode');
+            document.body.style.animation = 'none';
+            document.getElementById('action-buttons').classList.remove('hidden');
+            document.getElementById('next-question-button-container').classList.add('hidden');
+            document.getElementById('toggle-timer-button').classList.add('hidden');
+            document.getElementById('time-limit-label').classList.remove('hidden');
+            document.getElementById('time-limit').classList.remove('hidden');
+            document.getElementById('start-timed-mode-button').classList.remove('hidden');
+            document.getElementById('normal-mode-button').classList.add('hidden');
+            loadQuiz();
+            // Disable shuffle button after returning to normal mode
+            isShuffleDisabled = true;
+            document.getElementById('shuffle-button').disabled = true;
+            // Stop TTS when switching to normal mode
+            speechSynthesis.cancel();
+            if (currentQuestionIndex === questions.length - 1) {
+                checkAnswers();
+            }
+        }
+
+        function startQuestionTimer() {
+            clearInterval(timerInterval);
+            timeLeft = parseInt(document.getElementById('time-limit').value, 10);
+            document.getElementById('timer').innerText = `Time left: ${timeLeft} seconds`;
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').innerText = `Time left: ${timeLeft} seconds`;
+                if (timeLeft <= 10) {
+                    document.body.style.animation = 'blink 1s infinite';
+                    if (timeLeft > 0) {
+                        playSound('beep');
+                    }
+                }
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    document.body.style.animation = 'none';
+                    playSound('final-beep');
+                    nextQuestion();
+                }
+            }, 1000);
+        }
+
+        function handleNextQuestion() {
+            playSound('final-beep'); // Play final beep when next question is clicked
+            if (currentQuestionIndex === questions.length - 1) {
+                switchToNormalMode();
+            } else {
+                nextQuestion();
+            }
+        }
+
+        function nextQuestion() {
+            clearInterval(timerInterval);
+            document.body.style.animation = 'none';
+            if (currentQuestionIndex < questions.length - 1) {
+                currentQuestionIndex++;
+                loadQuiz();
+                startQuestionTimer();
+            } else {
+                switchToNormalMode();
+            }
+        }
+
+        function resetQuiz() {
+            selectedAnswers.fill(null);
+            isShuffleDisabled = false; // Re-enable shuffle button
+            document.getElementById('shuffle-button').disabled = false;
+            enableOptions(); // Re-enable all radio buttons
+            document.getElementById('score').innerText = '';
+            document.getElementById('answer-keys').style.display = 'none';
+            clearFeedback(); // Clear correct/incorrect highlights
+            loadQuiz();
+        }
+
+        function enableOptions() {
+            const inputs = document.querySelectorAll('input[type="radio"]');
+            inputs.forEach(input => {
+                input.disabled = false;
+            });
+        }
+
+        function clearFeedback() {
+            const labels = document.querySelectorAll('.options label');
+            labels.forEach(label => {
+                label.classList.remove('correct', 'incorrect', 'highlight-correct');
+            });
+        }
+
+        function shuffleQuestions() {
+            document.getElementById('answer-keys').style.display = 'none';
+            document.getElementById('score').innerText = '';
+            for (let i = questions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [questions[i], questions[j]] = [questions[j], questions[i]];
+            }
+            loadQuiz();
+        }
+
+        function toggleInstantFeedback() {
+            instantFeedback = document.getElementById('instant-feedback-switch').checked;
+        }
+
+        function toggleReadingQuestion() {
+            enableReadingQuestion = document.getElementById('reading-question-switch').checked;
+            if (!enableReadingQuestion) {
+                speechSynthesis.cancel();
+            }
+        }
+
+        function toggleTimerVisibility() {
+            const timer = document.getElementById('timer');
+            const toggleButton = document.getElementById('toggle-timer-button');
+            if (isTimerVisible) {
+                timer.style.display = 'none';
+                toggleButton.innerText = 'Show Remaining Time';
+            } else {
+                timer.style.display = 'block';
+                toggleButton.innerText = 'Hide Remaining Time';
+            }
+            isTimerVisible = !isTimerVisible;
+        }
+
+        function playSound(type) {
+            const sound = new Audio(
+                type === 'correct' ? 'correct-sound.mp3' :
+                type === 'incorrect' ? 'wrong-sound.mp3' :
+                type === 'final-beep' ? 'final-beep.mp3' :
+                'beep.mp3'
+            );
+            sound.play();
+        }
+
+        function speakQuestionAndOptions(questionObj) {
+            if (enableReadingQuestion) {
+                speechSynthesis.cancel(); // Stop any ongoing speech
+                const utterance = new SpeechSynthesisUtterance(questionObj.question + ". " + questionObj.options.join(". "));
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        function handleAnswer(questionIndex, selectedOption) {
+            selectedAnswers[questionIndex] = selectedOption;
+            if (instantFeedback) {
+                speechSynthesis.cancel(); // Stop TTS when answering with instant feedback
+                const correctOption = questions[questionIndex].correct;
+                const optionElement = document.querySelector(`input[name="question${questionIndex}"][value="${selectedOption}"]`);
+                const optionLabel = optionElement.parentElement;
+                if (selectedOption === correctOption) {
+                    optionLabel.classList.add('correct');
+                    playSound('correct');
+                    stopAndSpeak("Correct");
+                } else {
+                    optionLabel.classList.add('incorrect');
+                    playSound('incorrect');
+                    stopAndSpeak("Try again");
+                }
+            }
+        }
+
+        function stopAndSpeak(text) {
+            speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            speechSynthesis.speak(utterance);
+        }
+
+        function checkAnswers() {
+            let score = 0;
+            questions.forEach((q, i) => {
+                const selectedOption = selectedAnswers[i];
+                if (selectedOption !== null) {
+                    if (selectedOption === q.correct) {
+                        score++;
+                        document.querySelector(`input[name="question${i}"][value="${selectedOption}"]`).parentElement.classList.add('correct');
+                    } else {
+                        document.querySelector(`input[name="question${i}"][value="${selectedOption}"]`).parentElement.classList.add('incorrect');
+                    }
+                }
+            });
+            document.getElementById('score').innerText = `Your score: ${score} out of ${questions.length}`;
+            disableOptions();
+        }
+
+        function disableOptions() {
+            const inputs = document.querySelectorAll('input[type="radio"]');
+            inputs.forEach(input => {
+                input.disabled = true;
+            });
+        }
+
+        function showAnswerKeys() {
+            const answerKeysDiv = document.getElementById('answer-keys');
+            const keysParagraph = document.getElementById('keys');
+            let keys = '';
+            questions.forEach((q, i) => {
+                const correctOption = q.options[q.correct];
+                const correctLetter = correctOption.charAt(0);
+                keys += `${i + 1}. ${correctLetter}<br>`;
+                const options = document.querySelectorAll(`input[name="question${i}"]`);
+                options[q.correct].parentElement.classList.add('highlight-correct');
+            });
+            keysParagraph.innerHTML = keys;
+            answerKeysDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
